@@ -24,16 +24,17 @@ st.sidebar.markdown("---")
 # YENİ BÖLÜM: AKILLI ZAMAN DİLİMİ VE MUM ARALIĞI
 st.sidebar.subheader("⏱️ Zaman ve Mum Ayarları")
 
-interval_secimi = st.sidebar.selectbox("Mum Aralığı (Periyot)", ["15 Dakika", "30 Dakika", "1 Saat", "1 Gün", "1 Hafta", "1 Ay"], index=3)
-interval_sozlugu = {"15 Dakika": "15m", "30 Dakika": "30m", "1 Saat": "1h", "1 Gün": "1d", "1 Hafta": "1wk", "1 Ay": "1mo"}
+# 4 SAATLİK SEÇENEĞİ BURAYA EKLENDİ
+interval_secimi = st.sidebar.selectbox("Mum Aralığı (Periyot)", ["15 Dakika", "30 Dakika", "1 Saat", "4 Saat", "1 Gün", "1 Hafta", "1 Ay"], index=4)
+interval_sozlugu = {"15 Dakika": "15m", "30 Dakika": "30m", "1 Saat": "1h", "4 Saat": "4h", "1 Gün": "1d", "1 Hafta": "1wk", "1 Ay": "1mo"}
 secilen_interval = interval_sozlugu[interval_secimi]
 
-# yfinance kısıtlamalarına göre çökmemesi için Dinamik Menü
+# 4 Saat için de 1 saatlik kısıtlamaları (Max 730 gün) geçerli
 if secilen_interval in ["15m", "30m"]:
     periyot_secenekleri = ["1 Gün", "5 Gün", "1 Ay", "60 Gün"]
     periyot_sozlugu = {"1 Gün": "1d", "5 Gün": "5d", "1 Ay": "1mo", "60 Gün": "60d"}
     index_val = 1
-elif secilen_interval == "1h":
+elif secilen_interval in ["1h", "4h"]:
     periyot_secenekleri = ["1 Ay", "3 Ay", "6 Ay", "1 Yıl", "730 Gün"]
     periyot_sozlugu = {"1 Ay": "1mo", "3 Ay": "3mo", "6 Ay": "6mo", "1 Yıl": "1y", "730 Gün": "730d"}
     index_val = 1
@@ -58,7 +59,7 @@ goster_rsi = st.sidebar.checkbox("RSI Alt Grafiği", value=True)
 goster_macd = st.sidebar.checkbox("MACD Alt Grafiği", value=True)
 
 with st.sidebar.expander("🧮 Detaylı Algoritma Ayarları"):
-    st.info("Not: Kısa/Uzun Vade ayarları seçtiğiniz 'Mum Aralığına' göre çalışır. (Örn: 1 Saat seçiliyken 22 HO = 22 Saat demektir.)")
+    st.info("Not: Kısa/Uzun Vade ayarları seçtiğiniz 'Mum Aralığına' göre çalışır.")
     kisa_vade = st.number_input("Kısa Vade HO", min_value=1, max_value=200, value=22, step=1)
     uzun_vade = st.number_input("Uzun Vade HO", min_value=2, max_value=500, value=50, step=1)
     rsi_periyot = st.number_input("RSI Periyodu", min_value=1, max_value=100, value=14, step=1)
@@ -74,7 +75,23 @@ st.title("KRFinans Yatırım Terminali 🚀")
 @st.cache_data 
 def veri_getir(sembol, periyot, aralik):
     hisse = yf.Ticker(sembol)
-    df = hisse.history(period=periyot, interval=aralik)
+    
+    # 4 SAATLİK MUM MÜHENDİSLİĞİ (YENİ EKLENDİ)
+    if aralik == "4h":
+        # Önce 1 saatlik veriyi çekiyoruz
+        df = hisse.history(period=periyot, interval="1h")
+        if not df.empty:
+            # 1 saatlik mumları 4 saatliğe matematiksel olarak sıkıştırıyoruz
+            df = df.resample('4h').agg({
+                'Open': 'first',
+                'High': 'max',
+                'Low': 'min',
+                'Close': 'last',
+                'Volume': 'sum'
+            }).dropna()
+    else:
+        df = hisse.history(period=periyot, interval=aralik)
+        
     try:
         bilgi = hisse.info
     except:
@@ -159,7 +176,6 @@ else:
 
     st.subheader(f"{girilen_kod} - Teknik Grafik ({interval_secimi}lik Mumlar)")
     
-    # X Ekseninde hafta sonu boşluklarını gizlemek için ayar
     fig = make_subplots(rows=satir_sayisi, cols=1, shared_xaxes=True, vertical_spacing=0.04, row_heights=row_heights)
 
     fig.add_trace(go.Candlestick(x=veri.index, open=veri['Open'], high=veri['High'], low=veri['Low'], close=veri['Close'], increasing_line_color='green', decreasing_line_color='red', name="Fiyat"), row=1, col=1)
@@ -207,7 +223,6 @@ else:
         fig.add_trace(go.Scatter(x=veri.index, y=veri['MACD'], mode='lines', line=dict(color='blue', width=1.5), name="MACD"), row=macd_row, col=1)
         fig.add_trace(go.Scatter(x=veri.index, y=veri['MACD_Sinyal'], mode='lines', line=dict(color='orange', width=1.5), name="Sinyal"), row=macd_row, col=1)
 
-    # Haftasonlarını ve kapalı saatleri grafikte boşluk yapmaması için gizleyelim
     fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
     
     fig.update_layout(
@@ -226,9 +241,8 @@ else:
     son_macd = veri['MACD'].iloc[-1]
     son_sinyal = veri['MACD_Sinyal'].iloc[-1]
     
-    # 15dk/1saat seçiliyse yorumda saat ve dakikayı da göstersin
     son_tarih = veri.index[-1]
-    tarih_metni = son_tarih.strftime('%d-%m-%Y %H:%M') if secilen_interval in ['15m', '30m', '1h'] else son_tarih.strftime('%d-%m-%Y')
+    tarih_metni = son_tarih.strftime('%d-%m-%Y %H:%M') if secilen_interval in ['15m', '30m', '1h', '4h'] else son_tarih.strftime('%d-%m-%Y')
     
     yorum_metni = f"**{girilen_kod}** hissesinin son işlem anına ({tarih_metni}) ait sistemin okuduğu teknik görünüm:\n\n"
     
@@ -258,7 +272,6 @@ else:
         
     st.info(yorum_metni)
 
-    # --- EXCEL İNDİRME ---
     st.sidebar.markdown("---")
     csv_verisi = veri.to_csv().encode('utf-8')
     st.sidebar.download_button(label="📥 Tüm Verileri Excel Olarak İndir", data=csv_verisi, file_name=f"{girilen_kod}_KRFinans_{secilen_interval}.csv", mime='text/csv')
