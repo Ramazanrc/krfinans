@@ -197,6 +197,47 @@ else:
     )
 
     st.plotly_chart(fig, use_container_width=True, config={'scrollZoom': True, 'displayModeBar': True, 'modeBarButtonsToAdd': ['drawline', 'drawrect', 'eraseshape']})
+# --- YEPYENİ BÖLÜM: 🤖 OTOMATİK ALGORİTMA YORUMCUSU ---
+    st.markdown("---")
+    st.subheader("🤖 Algoritmik Yorumcu (Otomatik Analiz)")
+    
+    son_kapanis = veri['Close'].iloc[-1]
+    son_rsi = veri['RSI'].iloc[-1]
+    son_macd = veri['MACD'].iloc[-1]
+    son_sinyal = veri['MACD_Sinyal'].iloc[-1]
+    
+    yorum_metni = f"**{girilen_kod}** hissesinin son işlem gününe ({veri.index[-1].strftime('%d-%m-%Y')}) ait sistemin okuduğu teknik görünüm:\n\n"
+    
+    # 1. Trend Yorumu (Kısa HO vs Uzun HO)
+    if veri[sma_kisa_kolon].iloc[-1] > veri[sma_uzun_kolon].iloc[-1]:
+        yorum_metni += f"* 📈 **Trend Yönü:** {kisa_vade} günlük kısa vadeli ortalama, {uzun_vade} günlük uzun vadeli ortalamanın **üzerinde**. Genel görünüm pozitif ve yükseliş trendi hakim.\n"
+    else:
+        yorum_metni += f"* 📉 **Trend Yönü:** {kisa_vade} günlük kısa vadeli ortalama, {uzun_vade} günlük uzun vadeli ortalamanın **altında**. Hissede şu an bir düşüş baskısı ve zayıflık var.\n"
+
+    # 2. RSI Yorumu (Aşırı Alım/Satım)
+    if son_rsi >= 70:
+        yorum_metni += f"* ⚠️ **Fiyat Şişkinliği (RSI):** Gösterge {son_rsi:.1f} seviyesinde! Hisse kısa vadede aşırı değerlenmiş (şişmiş) olabilir. Teknik olarak kar satışları gelme riski yüksek.\n"
+    elif son_rsi <= 30:
+        yorum_metni += f"* 🟢 **Fiyat Ucuzluğu (RSI):** Gösterge {son_rsi:.1f} seviyesinde! Hisse kısa vadede aşırı satılmış ve ucuzlamış. Buralardan yukarı yönlü tepki alımları gelebilir.\n"
+    else:
+        yorum_metni += f"* ⚖️ **Fiyat Dengesi (RSI):** Gösterge {son_rsi:.1f} seviyesinde. Fiyat ne çok şişmiş ne de çok ucuzlamış; dengeli bir bölgede.\n"
+
+    # 3. MACD Yorumu (Momentum/İştah)
+    if son_macd > son_sinyal:
+        yorum_metni += f"* 🚀 **Piyasa İştahı (MACD):** MACD çizgisi sinyal çizgisini yukarı kesmiş durumda. Alıcıların iştahı ve yükseliş hızı (momentum) güçlü görünüyor.\n"
+    else:
+        yorum_metni += f"* 🐢 **Piyasa İştahı (MACD):** MACD çizgisi sinyal çizgisinin altında seyrediyor. Yükseliş hızı zayıf veya piyasa beklemede.\n"
+
+    # 4. Özel Sinyaller ve Formasyonlar
+    if veri['KR_Ozel_Sinyal'].iloc[-1]:
+        yorum_metni += f"* 💎 **KR-DİP AVCISI:** Sistem şu an hacimli bir dip dönüş formasyonu yakaladı! Güçlü bir 'Trend Dönüş' sinyali olabilir.\n"
+    elif veri['Yutan_Boga'].iloc[-1]:
+        yorum_metni += f"* 🐂 **MUM FORMASYONU:** Son gün 'Yutan Boğa' mumu belirdi. Fiyatın diplerden güç topladığını gösterir.\n"
+    elif veri['Yutan_Ayi'].iloc[-1]:
+        yorum_metni += f"* 🐻 **MUM FORMASYONU:** Son gün 'Yutan Ayı' mumu belirdi. Fiyatın tepelerde yorulduğunu gösterir.\n"
+        
+    # Yorumu şık bir bilgi kutusu içinde ekrana bas
+    st.info(yorum_metni)
 
     st.sidebar.markdown("---")
     csv_verisi = veri.to_csv().encode('utf-8')
