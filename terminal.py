@@ -21,9 +21,28 @@ else:
 
 st.sidebar.markdown("---")
 
-st.sidebar.subheader("📅 Zaman Dilimi")
-periyot_secimi = st.sidebar.selectbox("Grafik Süresi", ["1 Ay", "3 Ay", "6 Ay", "1 Yıl", "2 Yıl", "5 Yıl", "Maksimum"], index=3)
-periyot_sozlugu = {"1 Ay": "1mo", "3 Ay": "3mo", "6 Ay": "6mo", "1 Yıl": "1y", "2 Yıl": "2y", "5 Yıl": "5y", "Maksimum": "max"}
+# YENİ BÖLÜM: AKILLI ZAMAN DİLİMİ VE MUM ARALIĞI
+st.sidebar.subheader("⏱️ Zaman ve Mum Ayarları")
+
+interval_secimi = st.sidebar.selectbox("Mum Aralığı (Periyot)", ["15 Dakika", "30 Dakika", "1 Saat", "1 Gün", "1 Hafta", "1 Ay"], index=3)
+interval_sozlugu = {"15 Dakika": "15m", "30 Dakika": "30m", "1 Saat": "1h", "1 Gün": "1d", "1 Hafta": "1wk", "1 Ay": "1mo"}
+secilen_interval = interval_sozlugu[interval_secimi]
+
+# yfinance kısıtlamalarına göre çökmemesi için Dinamik Menü
+if secilen_interval in ["15m", "30m"]:
+    periyot_secenekleri = ["1 Gün", "5 Gün", "1 Ay", "60 Gün"]
+    periyot_sozlugu = {"1 Gün": "1d", "5 Gün": "5d", "1 Ay": "1mo", "60 Gün": "60d"}
+    index_val = 1
+elif secilen_interval == "1h":
+    periyot_secenekleri = ["1 Ay", "3 Ay", "6 Ay", "1 Yıl", "730 Gün"]
+    periyot_sozlugu = {"1 Ay": "1mo", "3 Ay": "3mo", "6 Ay": "6mo", "1 Yıl": "1y", "730 Gün": "730d"}
+    index_val = 1
+else:
+    periyot_secenekleri = ["1 Ay", "3 Ay", "6 Ay", "1 Yıl", "2 Yıl", "5 Yıl", "Maksimum"]
+    periyot_sozlugu = {"1 Ay": "1mo", "3 Ay": "3mo", "6 Ay": "6mo", "1 Yıl": "1y", "2 Yıl": "2y", "5 Yıl": "5y", "Maksimum": "max"}
+    index_val = 3
+
+periyot_secimi = st.sidebar.selectbox("Grafik Süresi (Geriye Dönük)", periyot_secenekleri, index=index_val)
 secilen_periyot = periyot_sozlugu[periyot_secimi]
 
 st.sidebar.markdown("---")
@@ -33,13 +52,13 @@ goster_ho = st.sidebar.checkbox("Hareketli Ortalamalar (HO)", value=True)
 goster_sinyal = st.sidebar.checkbox("Al/Sat Okları", value=False)
 goster_bollinger = st.sidebar.checkbox("Bollinger Zırhı", value=True)
 goster_formasyon = st.sidebar.checkbox("Boğa/Ayı Emojileri", value=False)
-# YENİ ÖZEL SİNYALİMİZ MENÜYE EKLENDİ
 goster_kr_ozel = st.sidebar.checkbox("💎 KR-Dip Avcısı Sinyali", value=True)
 goster_fibo = st.sidebar.checkbox("Fibonacci Seviyeleri", value=False)
 goster_rsi = st.sidebar.checkbox("RSI Alt Grafiği", value=True)
 goster_macd = st.sidebar.checkbox("MACD Alt Grafiği", value=True)
 
 with st.sidebar.expander("🧮 Detaylı Algoritma Ayarları"):
+    st.info("Not: Kısa/Uzun Vade ayarları seçtiğiniz 'Mum Aralığına' göre çalışır. (Örn: 1 Saat seçiliyken 22 HO = 22 Saat demektir.)")
     kisa_vade = st.number_input("Kısa Vade HO", min_value=1, max_value=200, value=22, step=1)
     uzun_vade = st.number_input("Uzun Vade HO", min_value=2, max_value=500, value=50, step=1)
     rsi_periyot = st.number_input("RSI Periyodu", min_value=1, max_value=100, value=14, step=1)
@@ -53,9 +72,9 @@ with st.sidebar.expander("🧮 Detaylı Algoritma Ayarları"):
 st.title("KRFinans Yatırım Terminali 🚀")
 
 @st.cache_data 
-def veri_getir(sembol, periyot):
+def veri_getir(sembol, periyot, aralik):
     hisse = yf.Ticker(sembol)
-    df = hisse.history(period=periyot)
+    df = hisse.history(period=periyot, interval=aralik)
     try:
         bilgi = hisse.info
     except:
@@ -63,10 +82,10 @@ def veri_getir(sembol, periyot):
     return df, bilgi
 
 with st.spinner(f"{girilen_kod} verileri çekiliyor..."):
-    veri, sirket_bilgisi = veri_getir(hisse_sembolu, secilen_periyot)
+    veri, sirket_bilgisi = veri_getir(hisse_sembolu, secilen_periyot, secilen_interval)
 
 if veri.empty:
-    st.error(f"❌ '{girilen_kod}' kodlu hisse bulunamadı. Yeni bir halka arz ise henüz sisteme düşmemiş olabilir.")
+    st.error(f"❌ '{girilen_kod}' kodlu hisse bulunamadı veya bu zaman aralığı için veri yok.")
 else:
     # --- TEMEL ANALİZ KARTLARI ---
     st.markdown("### 📊 Temel Analiz Özeti")
@@ -120,14 +139,10 @@ else:
     macd_renkleri = ['green' if val >= 0 else 'red' for val in veri['MACD_Hist']]
 
     # --- KR-ÖZEL SİNYALİ (HACİMLİ DİP AVCISI) ---
-    # 1. Hacim son 20 günün ortalamasının 1.5 katı mı?
     veri['Vol_SMA_20'] = veri['Volume'].rolling(window=20).mean()
     sart_hacim = veri['Volume'] > (veri['Vol_SMA_20'] * 1.5)
-    # 2. Fiyat Bollinger Alt bandına değdi mi veya altında mı?
     sart_bollinger = veri['Low'] <= veri['BB_Alt']
-    # 3. RSI 40'ın altında mı?
     sart_rsi = veri['RSI'] < 40
-    
     veri['KR_Ozel_Sinyal'] = sart_hacim & sart_bollinger & sart_rsi
 
     # --- DİNAMİK GRAFİK MİMARİSİ ---
@@ -142,7 +157,9 @@ else:
     else:
         row_heights = [1.0]; rsi_row = None; macd_row = None; grafik_boyu = 600
 
-    st.subheader(f"{girilen_kod} - Teknik Grafik")
+    st.subheader(f"{girilen_kod} - Teknik Grafik ({interval_secimi}lik Mumlar)")
+    
+    # X Ekseninde hafta sonu boşluklarını gizlemek için ayar
     fig = make_subplots(rows=satir_sayisi, cols=1, shared_xaxes=True, vertical_spacing=0.04, row_heights=row_heights)
 
     fig.add_trace(go.Candlestick(x=veri.index, open=veri['Open'], high=veri['High'], low=veri['Low'], close=veri['Close'], increasing_line_color='green', decreasing_line_color='red', name="Fiyat"), row=1, col=1)
@@ -152,8 +169,8 @@ else:
         fig.add_trace(go.Scatter(x=veri.index, y=veri['BB_Alt'], mode='lines', line=dict(color='gray', width=1, dash='dot'), fill='tonexty', fillcolor='rgba(128, 128, 128, 0.1)', name="BB Alt"), row=1, col=1)
 
     if goster_ho:
-        fig.add_trace(go.Scatter(x=veri.index, y=veri[sma_kisa_kolon], mode='lines', line=dict(color='blue', width=1.5), name=f"{kisa_vade} G. HO"), row=1, col=1)
-        fig.add_trace(go.Scatter(x=veri.index, y=veri[sma_uzun_kolon], mode='lines', line=dict(color='orange', width=2), name=f"{uzun_vade} G. HO"), row=1, col=1)
+        fig.add_trace(go.Scatter(x=veri.index, y=veri[sma_kisa_kolon], mode='lines', line=dict(color='blue', width=1.5), name=f"{kisa_vade} Mum HO"), row=1, col=1)
+        fig.add_trace(go.Scatter(x=veri.index, y=veri[sma_uzun_kolon], mode='lines', line=dict(color='orange', width=2), name=f"{uzun_vade} Mum HO"), row=1, col=1)
 
     if goster_sinyal:
         al_noktalari = veri[veri['Sinyal'] == 1]
@@ -167,7 +184,6 @@ else:
         if not boga_noktalari.empty: fig.add_trace(go.Scatter(x=boga_noktalari.index, y=boga_noktalari['Low'] * 0.92, mode='text', text="🐂", textposition="bottom center", name="Yutan Boğa", textfont=dict(size=20)), row=1, col=1)
         if not ayi_noktalari.empty: fig.add_trace(go.Scatter(x=ayi_noktalari.index, y=ayi_noktalari['High'] * 1.08, mode='text', text="🐻", textposition="top center", name="Yutan Ayı", textfont=dict(size=20)), row=1, col=1)
 
-    # ÖZEL SİNYALİN GRAFİĞE ÇİZİLMESİ
     if goster_kr_ozel:
         kr_noktalari = veri[veri['KR_Ozel_Sinyal']]
         if not kr_noktalari.empty:
@@ -191,13 +207,17 @@ else:
         fig.add_trace(go.Scatter(x=veri.index, y=veri['MACD'], mode='lines', line=dict(color='blue', width=1.5), name="MACD"), row=macd_row, col=1)
         fig.add_trace(go.Scatter(x=veri.index, y=veri['MACD_Sinyal'], mode='lines', line=dict(color='orange', width=1.5), name="Sinyal"), row=macd_row, col=1)
 
+    # Haftasonlarını ve kapalı saatleri grafikte boşluk yapmaması için gizleyelim
+    fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
+    
     fig.update_layout(
         height=grafik_boyu, margin=dict(l=0, r=0, t=30, b=0), hovermode='x unified', dragmode='pan',
         newshape=dict(line_color='yellow', line_width=2), xaxis_rangeslider_visible=False
     )
 
     st.plotly_chart(fig, use_container_width=True, config={'scrollZoom': True, 'displayModeBar': True, 'modeBarButtonsToAdd': ['drawline', 'drawrect', 'eraseshape']})
-# --- YEPYENİ BÖLÜM: 🤖 OTOMATİK ALGORİTMA YORUMCUSU ---
+
+    # --- 🤖 OTOMATİK ALGORİTMA YORUMCUSU ---
     st.markdown("---")
     st.subheader("🤖 Algoritmik Yorumcu (Otomatik Analiz)")
     
@@ -206,44 +226,39 @@ else:
     son_macd = veri['MACD'].iloc[-1]
     son_sinyal = veri['MACD_Sinyal'].iloc[-1]
     
-    yorum_metni = f"**{girilen_kod}** hissesinin son işlem gününe ({veri.index[-1].strftime('%d-%m-%Y')}) ait sistemin okuduğu teknik görünüm:\n\n"
+    # 15dk/1saat seçiliyse yorumda saat ve dakikayı da göstersin
+    son_tarih = veri.index[-1]
+    tarih_metni = son_tarih.strftime('%d-%m-%Y %H:%M') if secilen_interval in ['15m', '30m', '1h'] else son_tarih.strftime('%d-%m-%Y')
     
-    # 1. Trend Yorumu (Kısa HO vs Uzun HO)
+    yorum_metni = f"**{girilen_kod}** hissesinin son işlem anına ({tarih_metni}) ait sistemin okuduğu teknik görünüm:\n\n"
+    
     if veri[sma_kisa_kolon].iloc[-1] > veri[sma_uzun_kolon].iloc[-1]:
-        yorum_metni += f"* 📈 **Trend Yönü:** {kisa_vade} günlük kısa vadeli ortalama, {uzun_vade} günlük uzun vadeli ortalamanın **üzerinde**. Genel görünüm pozitif ve yükseliş trendi hakim.\n"
+        yorum_metni += f"* 📈 **Trend Yönü:** {kisa_vade} mumluk kısa vadeli ortalama, {uzun_vade} mumluk uzun vadeli ortalamanın **üzerinde**. Trend yönü yukarı.\n"
     else:
-        yorum_metni += f"* 📉 **Trend Yönü:** {kisa_vade} günlük kısa vadeli ortalama, {uzun_vade} günlük uzun vadeli ortalamanın **altında**. Hissede şu an bir düşüş baskısı ve zayıflık var.\n"
+        yorum_metni += f"* 📉 **Trend Yönü:** {kisa_vade} mumluk kısa vadeli ortalama, {uzun_vade} mumluk uzun vadeli ortalamanın **altında**. Trend yönü aşağı.\n"
 
-    # 2. RSI Yorumu (Aşırı Alım/Satım)
     if son_rsi >= 70:
-        yorum_metni += f"* ⚠️ **Fiyat Şişkinliği (RSI):** Gösterge {son_rsi:.1f} seviyesinde! Hisse kısa vadede aşırı değerlenmiş (şişmiş) olabilir. Teknik olarak kar satışları gelme riski yüksek.\n"
+        yorum_metni += f"* ⚠️ **Fiyat Şişkinliği (RSI):** Gösterge {son_rsi:.1f} seviyesinde! Hisse şu anki zaman diliminde aşırı değerlenmiş (şişmiş). Kar satışlarına dikkat.\n"
     elif son_rsi <= 30:
-        yorum_metni += f"* 🟢 **Fiyat Ucuzluğu (RSI):** Gösterge {son_rsi:.1f} seviyesinde! Hisse kısa vadede aşırı satılmış ve ucuzlamış. Buralardan yukarı yönlü tepki alımları gelebilir.\n"
+        yorum_metni += f"* 🟢 **Fiyat Ucuzluğu (RSI):** Gösterge {son_rsi:.1f} seviyesinde! Hisse bu periyotta aşırı satılmış ve ucuzlamış. Tepki alımı gelebilir.\n"
     else:
-        yorum_metni += f"* ⚖️ **Fiyat Dengesi (RSI):** Gösterge {son_rsi:.1f} seviyesinde. Fiyat ne çok şişmiş ne de çok ucuzlamış; dengeli bir bölgede.\n"
+        yorum_metni += f"* ⚖️ **Fiyat Dengesi (RSI):** Gösterge {son_rsi:.1f} seviyesinde. Fiyat dengeli bir bölgede, uç noktalarda değil.\n"
 
-    # 3. MACD Yorumu (Momentum/İştah)
     if son_macd > son_sinyal:
-        yorum_metni += f"* 🚀 **Piyasa İştahı (MACD):** MACD çizgisi sinyal çizgisini yukarı kesmiş durumda. Alıcıların iştahı ve yükseliş hızı (momentum) güçlü görünüyor.\n"
+        yorum_metni += f"* 🚀 **Piyasa İştahı (MACD):** MACD çizgisi sinyal çizgisini yukarı kesmiş durumda. Alım iştahı ve momentum güçlü.\n"
     else:
-        yorum_metni += f"* 🐢 **Piyasa İştahı (MACD):** MACD çizgisi sinyal çizgisinin altında seyrediyor. Yükseliş hızı zayıf veya piyasa beklemede.\n"
+        yorum_metni += f"* 🐢 **Piyasa İştahı (MACD):** MACD çizgisi sinyal çizgisinin altında. Yükseliş gücü zayıf görünüyor.\n"
 
-    # 4. Özel Sinyaller ve Formasyonlar
     if veri['KR_Ozel_Sinyal'].iloc[-1]:
-        yorum_metni += f"* 💎 **KR-DİP AVCISI:** Sistem şu an hacimli bir dip dönüş formasyonu yakaladı! Güçlü bir 'Trend Dönüş' sinyali olabilir.\n"
+        yorum_metni += f"* 💎 **KR-DİP AVCISI:** Sistem şu an hacimli bir dip dönüş formasyonu yakaladı! Bu periyotta güçlü bir 'Trend Dönüş' sinyali.\n"
     elif veri['Yutan_Boga'].iloc[-1]:
-        yorum_metni += f"* 🐂 **MUM FORMASYONU:** Son gün 'Yutan Boğa' mumu belirdi. Fiyatın diplerden güç topladığını gösterir.\n"
+        yorum_metni += f"* 🐂 **MUM FORMASYONU:** Son mum 'Yutan Boğa' mumu. Alıcıların gücü eline aldığını gösterir.\n"
     elif veri['Yutan_Ayi'].iloc[-1]:
-        yorum_metni += f"* 🐻 **MUM FORMASYONU:** Son gün 'Yutan Ayı' mumu belirdi. Fiyatın tepelerde yorulduğunu gösterir.\n"
+        yorum_metni += f"* 🐻 **MUM FORMASYONU:** Son mum 'Yutan Ayı' mumu. Satıcıların baskın gelmeye başladığını gösterir.\n"
         
-    # Yorumu şık bir bilgi kutusu içinde ekrana bas
     st.info(yorum_metni)
 
+    # --- EXCEL İNDİRME ---
     st.sidebar.markdown("---")
     csv_verisi = veri.to_csv().encode('utf-8')
-    st.sidebar.download_button(
-        label="📥 Tüm Verileri Excel(CSV) Olarak İndir",
-        data=csv_verisi,
-        file_name=f"{girilen_kod}_KRFinans_Analiz.csv",
-        mime='text/csv'
-    )
+    st.sidebar.download_button(label="📥 Tüm Verileri Excel Olarak İndir", data=csv_verisi, file_name=f"{girilen_kod}_KRFinans_{secilen_interval}.csv", mime='text/csv')
