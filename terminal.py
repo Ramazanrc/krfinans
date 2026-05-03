@@ -9,7 +9,7 @@ st.set_page_config(page_title="KRFinans Terminali", page_icon="📈", layout="wi
 
 # --- SOL MENÜ (KONTROL PANELİ) ---
 st.sidebar.header("🚀 KRFinans Ana Menü")
-mod_secimi = st.sidebar.radio("Çalışma Modu", ["Tekli Hisse Analizi", "Piyasa Tarayıcı (BİST30)"])
+mod_secimi = st.sidebar.radio("Çalışma Modu", ["Tekli Hisse Analizi", "Piyasa Tarayıcı"])
 
 st.sidebar.markdown("---")
 
