@@ -30,9 +30,11 @@ st.sidebar.markdown("---")
 
 st.sidebar.subheader("👁️ Görünüm Ayarları")
 goster_ho = st.sidebar.checkbox("Hareketli Ortalamalar (HO)", value=True)
-goster_sinyal = st.sidebar.checkbox("Al/Sat Okları", value=True)
-goster_bollinger = st.sidebar.checkbox("Bollinger Zırhı", value=False)
-goster_formasyon = st.sidebar.checkbox("Boğa/Ayı Emojileri", value=True)
+goster_sinyal = st.sidebar.checkbox("Al/Sat Okları", value=False)
+goster_bollinger = st.sidebar.checkbox("Bollinger Zırhı", value=True)
+goster_formasyon = st.sidebar.checkbox("Boğa/Ayı Emojileri", value=False)
+# YENİ ÖZEL SİNYALİMİZ MENÜYE EKLENDİ
+goster_kr_ozel = st.sidebar.checkbox("💎 KR-Dip Avcısı Sinyali", value=True)
 goster_fibo = st.sidebar.checkbox("Fibonacci Seviyeleri", value=False)
 goster_rsi = st.sidebar.checkbox("RSI Alt Grafiği", value=True)
 goster_macd = st.sidebar.checkbox("MACD Alt Grafiği", value=True)
@@ -66,7 +68,7 @@ with st.spinner(f"{girilen_kod} verileri çekiliyor..."):
 if veri.empty:
     st.error(f"❌ '{girilen_kod}' kodlu hisse bulunamadı. Yeni bir halka arz ise henüz sisteme düşmemiş olabilir.")
 else:
-    # --- YENİ EKLENEN BÖLÜM: TEMEL ANALİZ KARTLARI ---
+    # --- TEMEL ANALİZ KARTLARI ---
     st.markdown("### 📊 Temel Analiz Özeti")
     col1, col2, col3, col4 = st.columns(4)
     
@@ -75,7 +77,6 @@ else:
     pd_degeri = sirket_bilgisi.get('marketCap', 0)
     temettu_verimi = sirket_bilgisi.get('dividendYield', 0)
     
-    # Rakamları görselleştirme (Milyar ₺ formatı)
     pd_milyar = f"{pd_degeri / 1e9:.2f} Milyar ₺" if pd_degeri else "Bilinmiyor"
     temettu_yuzde = f"%{temettu_verimi * 100:.2f}" if temettu_verimi else "Yok"
     fk_formatli = f"{fk_orani:.2f}" if isinstance(fk_orani, float) else fk_orani
@@ -87,17 +88,15 @@ else:
     
     st.markdown("---")
 
-    # --- MATEMATİK HESAPLAMALARI ---
+    # --- MATEMATİK VE ALGORİTMALAR ---
     sma_kisa_kolon = f"SMA_{kisa_vade}"
     sma_uzun_kolon = f"SMA_{uzun_vade}"
     veri[sma_kisa_kolon] = veri['Close'].rolling(window=kisa_vade).mean()
     veri[sma_uzun_kolon] = veri['Close'].rolling(window=uzun_vade).mean()
 
     veri['Sinyal'] = 0 
-    alim_sarti = (veri[sma_kisa_kolon] > veri[sma_uzun_kolon]) & (veri[sma_kisa_kolon].shift(1) <= veri[sma_uzun_kolon].shift(1))
-    veri.loc[alim_sarti, 'Sinyal'] = 1
-    satim_sarti = (veri[sma_kisa_kolon] < veri[sma_uzun_kolon]) & (veri[sma_kisa_kolon].shift(1) >= veri[sma_uzun_kolon].shift(1))
-    veri.loc[satim_sarti, 'Sinyal'] = -1
+    veri.loc[(veri[sma_kisa_kolon] > veri[sma_uzun_kolon]) & (veri[sma_kisa_kolon].shift(1) <= veri[sma_uzun_kolon].shift(1)), 'Sinyal'] = 1
+    veri.loc[(veri[sma_kisa_kolon] < veri[sma_uzun_kolon]) & (veri[sma_kisa_kolon].shift(1) >= veri[sma_uzun_kolon].shift(1)), 'Sinyal'] = -1
 
     veri['Yutan_Boga'] = (veri['Close'].shift(1) < veri['Open'].shift(1)) & (veri['Close'] > veri['Open']) & (veri['Open'] <= veri['Close'].shift(1)) & (veri['Close'] >= veri['Open'].shift(1))
     veri['Yutan_Ayi'] = (veri['Close'].shift(1) > veri['Open'].shift(1)) & (veri['Close'] < veri['Open']) & (veri['Open'] >= veri['Close'].shift(1)) & (veri['Close'] <= veri['Open'].shift(1))
@@ -120,9 +119,16 @@ else:
     veri['MACD_Hist'] = veri['MACD'] - veri['MACD_Sinyal']
     macd_renkleri = ['green' if val >= 0 else 'red' for val in veri['MACD_Hist']]
 
-    # --- CANLI ALARMLAR ---
-    if veri['Yutan_Boga'].iloc[-1]: st.success(f"🔥 DİKKAT: {girilen_kod} için son işlem gününde 'YUTAN BOĞA' formasyonu tespit edildi!")
-    elif veri['Yutan_Ayi'].iloc[-1]: st.warning(f"⚠️ DİKKAT: {girilen_kod} için son işlem gününde 'YUTAN AYI' formasyonu tespit edildi!")
+    # --- KR-ÖZEL SİNYALİ (HACİMLİ DİP AVCISI) ---
+    # 1. Hacim son 20 günün ortalamasının 1.5 katı mı?
+    veri['Vol_SMA_20'] = veri['Volume'].rolling(window=20).mean()
+    sart_hacim = veri['Volume'] > (veri['Vol_SMA_20'] * 1.5)
+    # 2. Fiyat Bollinger Alt bandına değdi mi veya altında mı?
+    sart_bollinger = veri['Low'] <= veri['BB_Alt']
+    # 3. RSI 40'ın altında mı?
+    sart_rsi = veri['RSI'] < 40
+    
+    veri['KR_Ozel_Sinyal'] = sart_hacim & sart_bollinger & sart_rsi
 
     # --- DİNAMİK GRAFİK MİMARİSİ ---
     satir_sayisi = 1
@@ -161,6 +167,12 @@ else:
         if not boga_noktalari.empty: fig.add_trace(go.Scatter(x=boga_noktalari.index, y=boga_noktalari['Low'] * 0.92, mode='text', text="🐂", textposition="bottom center", name="Yutan Boğa", textfont=dict(size=20)), row=1, col=1)
         if not ayi_noktalari.empty: fig.add_trace(go.Scatter(x=ayi_noktalari.index, y=ayi_noktalari['High'] * 1.08, mode='text', text="🐻", textposition="top center", name="Yutan Ayı", textfont=dict(size=20)), row=1, col=1)
 
+    # ÖZEL SİNYALİN GRAFİĞE ÇİZİLMESİ
+    if goster_kr_ozel:
+        kr_noktalari = veri[veri['KR_Ozel_Sinyal']]
+        if not kr_noktalari.empty:
+            fig.add_trace(go.Scatter(x=kr_noktalari.index, y=kr_noktalari['Low'] * 0.88, mode='text', text="💎", textposition="bottom center", name="KR-Dip Avcısı", textfont=dict(size=24)), row=1, col=1)
+
     if goster_fibo:
         max_fiyat = veri['High'].max()
         min_fiyat = veri['Low'].min()
@@ -186,7 +198,6 @@ else:
 
     st.plotly_chart(fig, use_container_width=True, config={'scrollZoom': True, 'displayModeBar': True, 'modeBarButtonsToAdd': ['drawline', 'drawrect', 'eraseshape']})
 
-    # --- YENİ EKLENEN BÖLÜM: EXCEL İNDİRME BUTONU ---
     st.sidebar.markdown("---")
     csv_verisi = veri.to_csv().encode('utf-8')
     st.sidebar.download_button(
