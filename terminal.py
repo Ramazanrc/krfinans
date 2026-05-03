@@ -323,26 +323,46 @@ if mod_secimi == "Tekli Hisse Analizi":
 # --- MOD 2: PİYASA TARAYICI ---
 else:
     st.title("🔍 KRFinans - Akıllı Piyasa Tarayıcı")
-    st.write("BİST30 hisseleri saniyeler içinde taranıyor ve KR-Algoritmalarına göre listeleniyor...")
     
-    bist30 = [
-        'AKBNK.IS', 'ARCLK.IS', 'ASELS.IS', 'BIMAS.IS', 'EKGYO.IS', 'ENKAI.IS', 'EREGL.IS',
-        'FROTO.IS', 'GARAN.IS', 'GUBRF.IS', 'HALKB.IS', 'HEKTS.IS', 'ISCTR.IS', 'KCHOL.IS',
-        'KOZAA.IS', 'KOZAL.IS', 'KRDMD.IS', 'PETKM.IS', 'PGSUS.IS', 'SAHOL.IS', 'SASA.IS',
-        'SISE.IS', 'TAVHL.IS', 'TCELL.IS', 'THYAO.IS', 'TKFEN.IS', 'TTKOM.IS', 'TUPRS.IS',
-        'VAKBN.IS', 'YKBNK.IS'
-    ]
+    # Kullanıcıya tarama havuzunu seçtiriyoruz
+    tarama_kapsami = st.selectbox("Tarama Havuzu Seçin:", ["BİST 30 (Hızlı Tarama)", "BİST 50", "BİST 100 (Kapsamlı Tarama)"])
+    st.write(f"{tarama_kapsami} hisseleri taranıyor ve KR-Algoritmalarına göre listeleniyor...")
     
+    # BİST HİSSE LİSTELERİ
+    liste_bist30 = ['AKBNK.IS', 'ARCLK.IS', 'ASELS.IS', 'BIMAS.IS', 'EKGYO.IS', 'ENKAI.IS', 'EREGL.IS', 'FROTO.IS', 'GARAN.IS', 'GUBRF.IS', 'HALKB.IS', 'HEKTS.IS', 'ISCTR.IS', 'KCHOL.IS', 'KOZAA.IS', 'KOZAL.IS', 'KRDMD.IS', 'PETKM.IS', 'PGSUS.IS', 'SAHOL.IS', 'SASA.IS', 'SISE.IS', 'TAVHL.IS', 'TCELL.IS', 'THYAO.IS', 'TKFEN.IS', 'TTKOM.IS', 'TUPRS.IS', 'VAKBN.IS', 'YKBNK.IS']
+    
+    liste_bist50 = liste_bist30 + ['ALARK.IS', 'CCOLA.IS', 'DOAS.IS', 'ENJSA.IS', 'GESAN.IS', 'ISMEN.IS', 'KONTR.IS', 'MGROS.IS', 'ODAS.IS', 'OYAKC.IS', 'SOKM.IS', 'TOASO.IS', 'TSKB.IS', 'TTRAK.IS', 'VESBE.IS', 'YGGYO.IS', 'ZOREN.IS', 'AEFES.IS', 'ASTOR.IS', 'EUPWR.IS']
+    
+    liste_bist100 = liste_bist50 + ['AGHOL.IS', 'AHGAZ.IS', 'AKFGY.IS', 'AKSA.IS', 'AKSEN.IS', 'ALBRK.IS', 'ALFAS.IS', 'AYDEM.IS', 'BAGFS.IS', 'BERA.IS', 'BRSAN.IS', 'CANTE.IS', 'CIMSA.IS', 'CWENE.IS', 'DOHOL.IS', 'ECILC.IS', 'EGEEN.IS', 'ENERY.IS', 'EUREN.IS', 'FENER.IS', 'GENIL.IS', 'GLYHO.IS', 'GWIND.IS', 'HLGYO.IS', 'IMASM.IS', 'IPEKE.IS', 'ISGYO.IS', 'KARSN.IS', 'KAYSE.IS', 'KMPUR.IS', 'KORDS.IS', 'KZBGY.IS', 'MAVI.IS', 'MIATK.IS', 'OTKAR.IS', 'PENTA.IS', 'QUAGR.IS', 'SARKY.IS', 'SKBNK.IS', 'SMRTG.IS', 'TUKAS.IS', 'ULKER.IS', 'VAKKO.IS', 'YEOTK.IS', 'ZGOLD.IS']
+
+    # Seçime göre listeyi belirliyoruz
+    if "30" in tarama_kapsami:
+        taranacak_liste = liste_bist30
+    elif "50" in tarama_kapsami:
+        taranacak_liste = liste_bist50
+    else:
+        taranacak_liste = liste_bist100
+
     if st.button("Taramayı Başlat"):
         sonuclar = []
         progress_bar = st.progress(0)
+        durum_metni = st.empty()
         
-        for i, hisse in enumerate(bist30):
+        import time # Ban yememek için bekleme modülü
+        
+        for i, hisse in enumerate(taranacak_liste):
+            durum_metni.text(f"Taranıyor: {hisse} ({i+1}/{len(taranacak_liste)})")
             res = hisse_analiz_et(hisse)
             if res:
                 sonuclar.append(res)
-            progress_bar.progress((i + 1) / len(bist30))
+            
+            # Eğer 30'dan fazla hisse taranıyorsa, Yahoo bizi banlamasın diye her hissede çok kısa (0.2 saniye) bekliyoruz
+            if len(taranacak_liste) > 30:
+                time.sleep(0.2)
+                
+            progress_bar.progress((i + 1) / len(taranacak_liste))
         
+        durum_metni.text("Tarama Bitti!")
         df_sonuc = pd.DataFrame(sonuclar)
         
         # Renklendirme ve Görselleştirme
@@ -365,8 +385,10 @@ else:
         # Özet İstatistikler
         col1, col2 = st.columns(2)
         firsatlar = df_sonuc[df_sonuc['Durum'].str.contains("💎|✅|🟢")]
-        col1.success(f"🔍 Tarama Tamamlandı! {len(firsatlar)} hissede alım/fırsat sinyali bulundu.")
+        col1.success(f"🔍 Tarama Tamamlandı! BİST{len(taranacak_liste)} havuzunda {len(firsatlar)} hissede alım/fırsat sinyali bulundu.")
         
         if not firsatlar.empty:
             st.subheader("🔥 Öne Çıkan Fırsat Listesi")
             st.table(firsatlar)
+    
+    
